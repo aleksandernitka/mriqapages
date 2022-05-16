@@ -13,16 +13,22 @@ this fns create a single html which embed the data
 import os
 
 ### DEFs
-def plot_mpm_maps(sub, hmridir = '/mnt/nasips/COST_mri/derivatives/hMRI/'):
+
+def plot_mpm_maps(sub, hmridir = '/mnt/nasips/COST_mri/derivatives/hMRI/', \
+                  outdir = 'qaPages/hmri/png'):
     
     from nilearn import plotting
     from os.path import join
     from os import listdir as ls
+    import matplotlib.pyplot as plt
     import cmocean
+    import warnings
     
-    hmridir = '/mnt/nasips/COST_mri/derivatives/hMRI/'
-    sub = 'sub-13000'
+    warnings.filterwarnings("ignore")
+    
     mpm_maps = [f for f in ls(join(hmridir, sub, 'Results')) if f.endswith('.nii')]
+    
+    print(f'{sub} plotting hmri maps.')
     
     # for a better plotting, some maps need thresholds to be set
     bounds = dict(PD=[5, 200], 
@@ -31,20 +37,37 @@ def plot_mpm_maps(sub, hmridir = '/mnt/nasips/COST_mri/derivatives/hMRI/'):
                   R2s_OLS=[0,50],
                   MTsat=[0,10])
     
+    pngs = []
+    
     for m in mpm_maps:
+        
         n = m.split('.')[0].split('_')[-1]
         if n == 'OLS':
             n = 'R2s_OLS'
+
+        fig, axes = plt.subplots(nrows = 3, ncols=1, figsize = (20, 10))
+        plt.tight_layout()
+        fig.set_tight_layout(True)
+
+        for x, p in enumerate(['x','y','z']):
+		
+            plotting.plot_anat(join(hmridir, sub, 'Results', m), \
+    		                    title=f'{sub} {n}', \
+                                figure = fig,\
+    		                    display_mode=p, \
+    		                    draw_cross = False, \
+    		                    axes = axes[x],\
+    		                    black_bg=True,\
+    		                    cut_coords=[-30, -20, -10, 0, 10, 20, 30],\
+    		                    vmin = bounds[n][0], vmax = bounds[n][1],\
+    		                    cmap = cmocean.cm.tarn)
+            
+
+        fig.savefig(join(outdir, f'{sub}_{n}.png'), transparent = True, bbox_inches = 'tight')
+        plt.close()
+        pngs.append(f'{sub}_{n}.png')
         
-        plotting.plot_anat(join(hmridir, sub, 'Results', m), \
-                           title = f'{sub} {n}', display_mode='z', \
-                               cut_coords=[-50, -25, 0, 25, 50], black_bg=True,\
-                               cmap = cmocean.cm.tarn,\
-                               vmin = bounds[n][0], vmax = bounds[n][1],
-                               output_file = join())
-
-
-
+    return pngs
 
 def mk_thumbnail(image_path, x, y, save_path, subject_id):
     from PIL import Image
@@ -108,21 +131,23 @@ for f in hMRI_dirs:
         mpm_qlt.sort()
         
         # Make screens for all nii in mpm_quality4
-        niis = [f for f in os.listdir(os.path.join(hMRI, f, 'Results')) if f.endswith('.nii')]
+        # niis = [f for f in os.listdir(os.path.join(hMRI, f, 'Results')) if f.endswith('.nii')]
         
         # final page html code
         mpm_html = ""
         
-        # these screens are accessible from pngs_out + sub-XXXXX_WM.png
         mpm_brains_html = ''
         
-        for i in niis:
-            nii_anat_plot(os.path.join(hMRI, f, 'Results', i), pngs_out, i)
-            # temp filename
-            tfn = os.path.join(pngs_out,i.replace('nii', 'png'))
-            n = i.split('_')[-1].split('.')[0]
+        # create pngs from hmri maps and save filenames
+        maps = plot_mpm_maps(f)
+        maps.sort()
+        
+        for m in maps:
+            mid = m.split('.')[0].split('_')[-1]
+            if mid == 'OLS':
+                mid = 'R2s_OLS'
             
-            mpm_brains_html += f'<center><a id = "{n}"><h2>{n}</h2></a><br><img src="{tfn}"><br><br></center>'
+            mpm_brains_html += f'<center><a id = "{mid}"><h2>{mid}</h2></a><br><img src="{os.path.join(pngs_out, m)}"><br><br></center>'
             
         mpm_html += mpm_brains_html
         
